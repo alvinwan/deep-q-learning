@@ -5,7 +5,7 @@ Usage:
 
 Options:
     --envid=<envid>         Environment id [default: SpaceInvadersNoFrameskip-v3]
-    --model=(atari|simple)  Model to use for training [default: atari]
+    --model=(atari|simple)  Model to use for training [default: simple]
     --timesteps=<steps>     Number of timesteps to run [default: 40000000]
 """
 

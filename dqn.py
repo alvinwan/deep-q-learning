@@ -219,10 +219,11 @@ def learn(env,
                 or not replay_buffer.can_sample(batch_size):
             action = env.action_space.sample()
         else:
-            r_obs = replay_buffer.encode_recent_observation()
-            action = session.run(tf.argmax(curr_q), feed_dict={obs_t_ph: r_obs})
+            r_obs = replay_buffer.encode_recent_observation()[np.newaxis, ...]
+            curr_q_eval = curr_q.eval({obs_t_ph: r_obs}, session=session)
+            action = np.argmax(curr_q_eval)
 
-        _, reward, done, info = env.step(action)
+        last_obs, reward, done, info = env.step(action)
         replay_buffer.store_effect(t_obs_idx, action, reward, done)
 
         if done:
@@ -278,7 +279,6 @@ def learn(env,
 
             # YOUR CODE HERE
 
-            learning_rate = optimizer_spec.lr_schedule.value(t)
             obs_t, act_t, rew_t, obs_tp1, done_mask = \
                 replay_buffer.sample(batch_size)
 
@@ -299,7 +299,7 @@ def learn(env,
                 rew_t_ph: rew_t,
                 obs_tp1_ph: obs_tp1,
                 done_mask_ph: done_mask,
-                learning_rate: learning_rate
+                learning_rate: optimizer_spec.lr_schedule.value(t)
             })
 
             if t % target_update_freq == 0:
