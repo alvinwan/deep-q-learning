@@ -4,8 +4,9 @@ Usage:
     run_dqn_atari.py [options]
 
 Options:
-    --envid=<envid>         Environment id [default: AlienNoFrameskip-v3]
-    --timesteps=<steps>     Number of timesteps to run [default: 2000000]
+    --envid=<envid>         Environment id [default: SpaceInvadersNoFrameskip-v3]
+    --model=(atari|simple)  Model to use for training [default: atari]
+    --timesteps=<steps>     Number of timesteps to run [default: 40000000]
 """
 
 import docopt
@@ -38,9 +39,21 @@ def atari_model(img_in, num_actions, scope, reuse=False):
 
         return out
 
+def simple_model(img_in, num_actions, scope, reuse=False):
+    with tf.variable_scope(scope, reuse=reuse):
+        out = img_in
+        with tf.variable_scope("convnet"):
+            out = layers.convolution2d(out, num_outputs=32, kernel_size=8, stride=4, activation_fn=tf.nn.relu)
+        out = layers.flatten(out)
+        with tf.variable_scope("action_value"):
+            out = layers.fully_connected(out, num_outputs=num_actions, activation_fn=None)
+
+        return out
+
 def atari_learn(env,
                 session,
-                num_timesteps):
+                num_timesteps,
+                model):
     # This is just a rough estimate
     num_iterations = float(num_timesteps) / 4.0
 
@@ -70,9 +83,14 @@ def atari_learn(env,
         ], outside_value=0.01
     )
 
+    if model == 'atari':
+        q_func = atari_model
+    else:
+        q_func = simple_model
+
     dqn.learn(
         env,
-        q_func=atari_model,
+        q_func=q_func,
         optimizer_spec=optimizer,
         session=session,
         exploration=exploration_schedule,
@@ -130,8 +148,12 @@ def main():
     # Run training
     seed = 0 # Use a seed of zero (you may want to randomize the seed!)
     env = get_env(arguments['--envid'], seed)
-    session = get_session() # 40000000 timesteps for benchmarks
-    atari_learn(env, session, num_timesteps=int(arguments['--timesteps']))
+    session = get_session()
+    atari_learn(
+        env,
+        session,
+        num_timesteps=int(arguments['--timesteps']),
+        model=arguments['--model'].lower())
 
 if __name__ == "__main__":
     main()
