@@ -12,17 +12,18 @@ Options:
 """
 
 import docopt
+import dqn
 import gym
-from gym import wrappers
 import os.path as osp
 import random
 import numpy as np
-from atari_wrappers import *
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
 
-import dqn
+from atari_wrappers import *
 from dqn_utils import *
+from gym import wrappers
+from tensorflow.contrib.layers.python.layers import initializers
 
 
 def atari_model(img_in, num_actions, scope, reuse=False):
@@ -44,8 +45,11 @@ def atari_model(img_in, num_actions, scope, reuse=False):
 def simple_model(img_in, num_actions, scope, reuse=False, num_filters=64):
     with tf.variable_scope(scope, reuse=reuse):
         out = img_in
+        gauss_initializer = initializers.xavier_initializer(uniform=False)  # stddev = 1/n
         with tf.variable_scope("convnet"):
-            out = layers.convolution2d(out, num_outputs=num_filters, kernel_size=8, stride=4, activation_fn=tf.nn.relu)
+            out = layers.convolution2d(
+                out, num_outputs=num_filters, kernel_size=8, stride=4,
+                activation_fn=tf.nn.relu, weights_initializer=gauss_initializer)
         out = layers.flatten(out)
         with tf.variable_scope("action_value"):
             out = layers.fully_connected(out, num_outputs=num_actions, activation_fn=None)
