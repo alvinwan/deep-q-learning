@@ -4,8 +4,10 @@ Usage:
     run_dqn_atari.py [options]
 
 Options:
+    --batch-size=<size>     Batch size [default: 32]
     --envid=<envid>         Environment id [default: SpaceInvadersNoFrameskip-v3]
     --model=(atari|simple)  Model to use for training [default: simple]
+    --num-filters=<num>     Number of output filters for simple model [default: 64]
     --timesteps=<steps>     Number of timesteps to run [default: 40000000]
 """
 
@@ -39,11 +41,11 @@ def atari_model(img_in, num_actions, scope, reuse=False):
 
         return out
 
-def simple_model(img_in, num_actions, scope, reuse=False):
+def simple_model(img_in, num_actions, scope, reuse=False, num_filters=64):
     with tf.variable_scope(scope, reuse=reuse):
         out = img_in
         with tf.variable_scope("convnet"):
-            out = layers.convolution2d(out, num_outputs=32, kernel_size=8, stride=4, activation_fn=tf.nn.relu)
+            out = layers.convolution2d(out, num_outputs=num_filters, kernel_size=8, stride=4, activation_fn=tf.nn.relu)
         out = layers.flatten(out)
         with tf.variable_scope("action_value"):
             out = layers.fully_connected(out, num_outputs=num_actions, activation_fn=None)
@@ -53,7 +55,9 @@ def simple_model(img_in, num_actions, scope, reuse=False):
 def atari_learn(env,
                 session,
                 num_timesteps,
-                model):
+                model,
+                batch_size=32,
+                num_filters=64):
     # This is just a rough estimate
     num_iterations = float(num_timesteps) / 4.0
 
@@ -86,7 +90,8 @@ def atari_learn(env,
     if model == 'atari':
         q_func = atari_model
     else:
-        q_func = simple_model
+        q_func = lambda *args, **kwargs:\
+            simple_model(*args, num_filters=num_filters, **kwargs)
 
     dqn.learn(
         env,
@@ -96,13 +101,14 @@ def atari_learn(env,
         exploration=exploration_schedule,
         stopping_criterion=stopping_criterion,
         replay_buffer_size=1000000,
-        batch_size=32,
+        batch_size=batch_size,
         gamma=0.99,
         learning_starts=50000,
         learning_freq=4,
         frame_history_len=4,
         target_update_freq=10000,
-        grad_norm_clipping=10
+        grad_norm_clipping=10,
+        model=model
     )
     env.close()
 
@@ -153,7 +159,9 @@ def main():
         env,
         session,
         num_timesteps=int(arguments['--timesteps']),
-        model=arguments['--model'].lower())
+        num_filters=int(arguments['--num-filters']),
+        model=arguments['--model'].lower(),
+        batch_size=int(arguments['--batch-size']))
 
 if __name__ == "__main__":
     main()

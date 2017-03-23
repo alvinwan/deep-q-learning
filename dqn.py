@@ -28,7 +28,8 @@ def learn(env,
           learning_freq=4,
           frame_history_len=4,
           target_update_freq=10000,
-          grad_norm_clipping=10):
+          grad_norm_clipping=10,
+          model='atari'):
     """Run Deep Q-learning algorithm.
 
     You can specify your own convnet using q_func.
@@ -78,6 +79,8 @@ def learn(env,
         each update to the target Q network
     grad_norm_clipping: float or None
         If not None gradients' norms are clipped to this value.
+    model: str
+        Name of the model being used
     """
     assert type(env.observation_space) == gym.spaces.Box
     assert type(env.action_space) == gym.spaces.Discrete
@@ -146,6 +149,10 @@ def learn(env,
     q_candidate_val = tf.reduce_sum(curr_q * actions, reduction_indices=1)
     total_error = tf.reduce_sum(tf.square(q_target_val - q_candidate_val))
 
+    # Take gradients only over FC for simple model.
+    q_func_vars_fc = tf.get_collection(global_vars, scope='q_func/action_value')
+    var_list = q_func_vars if model == 'simple' else q_func_vars_fc
+
     ######
 
     # construct optimization op (with gradient clipping)
@@ -153,7 +160,7 @@ def learn(env,
     optimizer = optimizer_spec.constructor(
         learning_rate=learning_rate, **optimizer_spec.kwargs)
     train_fn = minimize_and_clip(optimizer, total_error,
-        var_list=q_func_vars, clip_val=grad_norm_clipping)
+        var_list=var_list, clip_val=grad_norm_clipping)
 
     # update_target_fn will be called periodically to copy Q network to target Q network
     update_target_fn = []
