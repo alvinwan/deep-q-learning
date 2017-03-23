@@ -1,0 +1,5 @@
+docopt==0.6.2
+gym[all]==0.8.0
+matplotlib==2.0.0
+opencv-python==3.2.0.6
+tensorflow-gpu==1.0.1
