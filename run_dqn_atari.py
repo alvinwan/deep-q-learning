@@ -49,7 +49,8 @@ def simple_model(img_in, num_actions, scope, reuse=False, num_filters=64):
         with tf.variable_scope("convnet"):
             out = layers.convolution2d(
                 out, num_outputs=num_filters, kernel_size=8, stride=4,
-                activation_fn=tf.nn.relu, weights_initializer=gauss_initializer)
+                activation_fn=tf.nn.relu, weights_initializer=gauss_initializer,
+                trainable=False)
         out = layers.flatten(out)
         with tf.variable_scope("action_value"):
             out = layers.fully_connected(out, num_outputs=num_actions, activation_fn=None)
@@ -111,10 +112,12 @@ def atari_learn(env,
         learning_freq=4,
         frame_history_len=4,
         target_update_freq=10000,
-        grad_norm_clipping=10,
-        model=model
+        grad_norm_clipping=10
     )
     env.close()
+
+def atari_save():
+    pass
 
 def get_available_gpus():
     from tensorflow.python.client import device_lib
@@ -156,16 +159,23 @@ def main():
     arguments = docopt.docopt(__doc__)
 
     # Run training
-    seed = 0 # Use a seed of zero (you may want to randomize the seed!)
+    seed = 0  # Use a seed of zero (you may want to randomize the seed!)
     env = get_env(arguments['--envid'], seed)
     session = get_session()
+
+    model = arguments['--model'].lower()
+    num_filters = int(arguments['--num-filters'])
+    batch_size = int(arguments['--batch-size'])
+    print(' * [INFO] %s model (Filters: %d, Batch Size: %d)' % (
+        model, num_filters, batch_size))
     atari_learn(
         env,
         session,
         num_timesteps=int(arguments['--timesteps']),
-        num_filters=int(arguments['--num-filters']),
-        model=arguments['--model'].lower(),
-        batch_size=int(arguments['--batch-size']))
+        num_filters=num_filters,
+        model=model,
+        batch_size=batch_size)
+    atari_save()
 
 if __name__ == "__main__":
     main()

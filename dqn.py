@@ -1,12 +1,9 @@
 import sys
 import gym.spaces
 import itertools
-import matplotlib
-matplotlib.use('Agg')
-
-import matplotlib.pyplot as plt
 import numpy as np
 import random
+import time
 import tensorflow                as tf
 import tensorflow.contrib.layers as layers
 from collections import namedtuple
@@ -27,9 +24,9 @@ def learn(env,
           learning_starts=50000,
           learning_freq=4,
           frame_history_len=4,
+          start_time=time.time(),
           target_update_freq=10000,
-          grad_norm_clipping=10,
-          model='atari'):
+          grad_norm_clipping=10):
     """Run Deep Q-learning algorithm.
 
     You can specify your own convnet using q_func.
@@ -74,6 +71,8 @@ def learn(env,
         How many steps of environment to take between every experience replay
     frame_history_len: int
         How many past frames to include as input to the model.
+    start_time: datetime
+        The time of training start
     target_update_freq: int
         How many experience replay rounds (not steps!) to perform between
         each update to the target Q network
@@ -149,10 +148,6 @@ def learn(env,
     q_candidate_val = tf.reduce_sum(curr_q * actions, reduction_indices=1)
     total_error = tf.reduce_sum(tf.square(q_target_val - q_candidate_val))
 
-    # Take gradients only over FC for simple model.
-    q_func_vars_fc = tf.get_collection(global_vars, scope='q_func/action_value')
-    var_list = q_func_vars if model == 'simple' else q_func_vars_fc
-
     ######
 
     # construct optimization op (with gradient clipping)
@@ -160,7 +155,7 @@ def learn(env,
     optimizer = optimizer_spec.constructor(
         learning_rate=learning_rate, **optimizer_spec.kwargs)
     train_fn = minimize_and_clip(optimizer, total_error,
-        var_list=var_list, clip_val=grad_norm_clipping)
+        var_list=q_func_vars, clip_val=grad_norm_clipping)
 
     # update_target_fn will be called periodically to copy Q network to target Q network
     update_target_fn = []
@@ -322,6 +317,7 @@ def learn(env,
         if len(episode_rewards) > 100:
             best_mean_episode_reward = max(best_mean_episode_reward, mean_episode_reward)
         if t % LOG_EVERY_N_STEPS == 0 and model_initialized:
+            print("Time %s s" % int(time.time() - start_time))
             print("Timestep %d" % (t,))
             print("mean reward (100 episodes) %f" % mean_episode_reward)
             print("best mean reward %f" % best_mean_episode_reward)
