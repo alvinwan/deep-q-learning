@@ -9,11 +9,15 @@ Options:
     --model=(atari|simple)  Model to use for training [default: simple]
     --num-filters=<num>     Number of output filters for simple model [default: 64]
     --timesteps=<steps>     Number of timesteps to run [default: 40000000]
+    --restore=<filename>    Checkpoint file to restore from.
+    --ckpt-dir=<dir>        Directory contain checkpoint files [default: tmp/]
 """
 
 import docopt
 import dqn
 import gym
+import time
+import os
 import os.path as osp
 import random
 import numpy as np
@@ -116,9 +120,6 @@ def atari_learn(env,
     )
     env.close()
 
-def atari_save():
-    pass
-
 def get_available_gpus():
     from tensorflow.python.client import device_lib
     local_device_protos = device_lib.list_local_devices()
@@ -161,21 +162,26 @@ def main():
     # Run training
     seed = 0  # Use a seed of zero (you may want to randomize the seed!)
     env = get_env(arguments['--envid'], seed)
-    session = get_session()
+    with get_session() as session:
 
-    model = arguments['--model'].lower()
-    num_filters = int(arguments['--num-filters'])
-    batch_size = int(arguments['--batch-size'])
-    print(' * [INFO] %s model (Filters: %d, Batch Size: %d)' % (
-        model, num_filters, batch_size))
-    atari_learn(
-        env,
-        session,
-        num_timesteps=int(arguments['--timesteps']),
-        num_filters=num_filters,
-        model=model,
-        batch_size=batch_size)
-    atari_save()
+        model = arguments['--model'].lower()
+        num_filters = int(arguments['--num-filters'])
+        batch_size = int(arguments['--batch-size'])
+        print(' * [INFO] %s model (Filters: %d, Batch Size: %d)' % (
+            model, num_filters, batch_size))
+
+        saver = tf.train.Saver()
+        if arguments['--restore']:
+            saver.restore(session, arguments['--restore'])
+        atari_learn(
+            env,
+            session,
+            num_timesteps=int(arguments['--timesteps']),
+            num_filters=num_filters,
+            model=model,
+            batch_size=batch_size)
+        saver.save(session, os.path.join(
+            arguments['--ckpt-dir'], 'model-%s.ckpt' % time.time()))
 
 if __name__ == "__main__":
     main()
