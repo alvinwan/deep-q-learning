@@ -4,13 +4,14 @@ Usage:
     run_dqn_atari.py [options]
 
 Options:
-    --batch-size=<size>     Batch size [default: 32]
-    --envid=<envid>         Environment id [default: SpaceInvadersNoFrameskip-v3]
-    --model=(atari|simple)  Model to use for training [default: simple]
-    --num-filters=<num>     Number of output filters for simple model [default: 64]
-    --timesteps=<steps>     Number of timesteps to run [default: 40000000]
-    --restore=<filename>    Checkpoint file to restore from.
-    --ckpt-dir=<dir>        Directory contain checkpoint files [default: tmp/]
+    --batch-size=<size>             Batch size [default: 32]
+    --envid=<envid>                 Environment id [default: SpaceInvadersNoFrameskip-v3]
+    --model=(atari|simple|fesimple) Model to use for training [default: simple]
+    --num-filters=<num>             Number of output filters for simple model [default: 64]
+    --timesteps=<steps>             Number of timesteps to run [default: 40000000]
+    --restore=<store>               Checkpoint to restore network from
+    --ckpt-dir=<dir>                Directory contain checkpoint files [default: ./checkpoints]
+    --learning-starts=<start>       Timestep when learning starts [default: 200000]
 """
 
 import docopt
@@ -46,6 +47,7 @@ def atari_model(img_in, num_actions, scope, reuse=False):
 
         return out
 
+
 def simple_model(img_in, num_actions, scope, reuse=False, num_filters=64):
     with tf.variable_scope(scope, reuse=reuse):
         out = img_in
@@ -61,14 +63,28 @@ def simple_model(img_in, num_actions, scope, reuse=False, num_filters=64):
 
         return out
 
+
+def simple_model_w_feat_eng(img_in, num_actions, scope, reuse=False):
+    with tf.variable_scope(scope, reuse=reuse):
+        out = img_in
+        out = layers.flatten(out)
+        with tf.variable_scope("action_value"):
+            out = layers.fully_connected(out, num_outputs=num_actions, activation_fn=tf.nn.relu)
+        return out
+
+
 def atari_learn(env,
                 session,
                 num_timesteps,
                 model,
+                restore=None,
+                checkpoint_dir='./checkpoints',
                 batch_size=32,
-                num_filters=64):
+                num_filters=64,
+                learning_starts=200000):
     # This is just a rough estimate
     num_iterations = float(num_timesteps) / 4.0
+    learning_starts = int(learning_starts) / 4.0
 
     lr_multiplier = 1.0
     lr_schedule = PiecewiseSchedule([
@@ -92,12 +108,14 @@ def atari_learn(env,
         [
             (0, 1.0),
             (1e6, 0.1),
-            (num_iterations / 2, 0.01),
+            (num_iterations / 2 if num_iterations > 1e6 else 1e7, 0.01),
         ], outside_value=0.01
     )
 
     if model == 'atari':
         q_func = atari_model
+    elif model =='fesimple':
+        q_func = simple_model_w_feat_eng
     else:
         q_func = lambda *args, **kwargs:\
             simple_model(*args, num_filters=num_filters, **kwargs)
@@ -112,18 +130,22 @@ def atari_learn(env,
         replay_buffer_size=1000000,
         batch_size=batch_size,
         gamma=0.99,
-        learning_starts=50000,
+        learning_starts=learning_starts,
         learning_freq=4,
         frame_history_len=4,
         target_update_freq=10000,
-        grad_norm_clipping=10
+        grad_norm_clipping=10,
+        restore=restore,
+        checkpoint_dir=checkpoint_dir
     )
     env.close()
+
 
 def get_available_gpus():
     from tensorflow.python.client import device_lib
     local_device_protos = device_lib.list_local_devices()
     return [x.physical_device_desc for x in local_device_protos if x.device_type == 'GPU']
+
 
 def set_global_seeds(i):
     try:
@@ -135,6 +157,7 @@ def set_global_seeds(i):
     np.random.seed(i)
     random.seed(i)
 
+
 def get_session():
     tf.reset_default_graph()
     tf_config = tf.ConfigProto(
@@ -143,6 +166,7 @@ def get_session():
     session = tf.Session(config=tf_config)
     print("AVAILABLE GPUS: ", get_available_gpus())
     return session
+
 
 def get_env(env_id, seed):
     env = gym.make(env_id)
@@ -155,6 +179,7 @@ def get_env(env_id, seed):
     env = wrap_deepmind(env)
 
     return env
+
 
 def main():
     arguments = docopt.docopt(__doc__)
@@ -170,18 +195,16 @@ def main():
         print(' * [INFO] %s model (Filters: %d, Batch Size: %d)' % (
             model, num_filters, batch_size))
 
-        saver = tf.train.Saver()
-        if arguments['--restore']:
-            saver.restore(session, arguments['--restore'])
         atari_learn(
             env,
             session,
             num_timesteps=int(arguments['--timesteps']),
             num_filters=num_filters,
             model=model,
-            batch_size=batch_size)
-        saver.save(session, os.path.join(
-            arguments['--ckpt-dir'], 'model-%s.ckpt' % time.time()))
+            batch_size=batch_size,
+            restore=arguments['--restore'],
+            checkpoint_dir=arguments['--ckpt-dir'],
+            learning_starts=arguments['--learning-starts'])
 
 if __name__ == "__main__":
     main()

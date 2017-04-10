@@ -1,3 +1,4 @@
+import os.path
 import sys
 import gym.spaces
 import itertools
@@ -26,7 +27,9 @@ def learn(env,
           frame_history_len=4,
           start_time=time.time(),
           target_update_freq=10000,
-          grad_norm_clipping=10):
+          grad_norm_clipping=10,
+          restore=None,
+          checkpoint_dir='./checkpoints'):
     """Run Deep Q-learning algorithm.
 
     You can specify your own convnet using q_func.
@@ -78,8 +81,6 @@ def learn(env,
         each update to the target Q network
     grad_norm_clipping: float or None
         If not None gradients' norms are clipped to this value.
-    model: str
-        Name of the model being used
     """
     assert type(env.observation_space) == gym.spaces.Box
     assert type(env.action_space) == gym.spaces.Discrete
@@ -176,6 +177,17 @@ def learn(env,
     best_mean_episode_reward = -float('inf')
     last_obs = env.reset()
     LOG_EVERY_N_STEPS = 10000
+    saver = tf.train.Saver()
+    run_id = str(start_time)[-6:].replace('.', '')
+    print(' * [INFO] Run id: %s' % run_id)
+
+    try:
+        os.makedirs(os.path.join(checkpoint_dir, run_id))
+    except Exception as e:
+        print(e)
+
+    if restore is not None:
+        saver.restore(session, restore)
 
     for t in itertools.count():
         ### 1. Check stopping criterion
@@ -317,7 +329,9 @@ def learn(env,
         if len(episode_rewards) > 100:
             best_mean_episode_reward = max(best_mean_episode_reward, mean_episode_reward)
         if t % LOG_EVERY_N_STEPS == 0 and model_initialized:
+
             print("Time %s s" % int(time.time() - start_time))
+            start_time = time.time()
             print("Timestep %d" % (t,))
             print("mean reward (100 episodes) %f" % mean_episode_reward)
             print("best mean reward %f" % best_mean_episode_reward)
@@ -325,3 +339,9 @@ def learn(env,
             print("exploration %f" % exploration.value(t))
             print("learning_rate %f" % optimizer_spec.lr_schedule.value(t))
             sys.stdout.flush()
+            saver.save(
+                session,
+                os.path.join(
+                    checkpoint_dir, run_id, 'step-%s.ckpt' % t))
+    print(' * [INFO] Final step saved to %s/step-final.ckpt' % run_id)
+    saver.save(session, os.path.join(checkpoint_dir, run_id, 'step-final.ckpt'))
