@@ -136,7 +136,7 @@ def minimize_and_clip(optimizer, objective, var_list, clip_val=10):
     for i, (grad, var) in enumerate(gradients):
         if grad is not None:
             gradients[i] = (tf.clip_by_norm(grad, clip_val), var)
-    return optimizer.apply_gradients(gradients)
+    return gradients, optimizer.apply_gradients(gradients)
 
 def initialize_interdependent_variables(session, vars_list, feed_dict):
     """Initialize a list of variables one at a time, which is useful if

@@ -144,9 +144,9 @@ def learn(env,
     target_q_func_vars = tf.get_collection(global_vars, scope='t_func')
 
     actions = tf.one_hot(act_t_ph, num_actions, 1.0, 0.0)
-    q_target_max = tf.reduce_max(target_q)
+    q_target_max = tf.reduce_max(target_q, axis=1)
     q_target_val = rew_t_ph + gamma * (1. - done_mask_ph) * q_target_max
-    q_candidate_val = tf.reduce_sum(curr_q * actions, reduction_indices=1)
+    q_candidate_val = tf.reduce_sum(curr_q * actions, axis=1)
     total_error = tf.reduce_sum(tf.square(q_target_val - q_candidate_val))
 
     ######
@@ -155,7 +155,7 @@ def learn(env,
     learning_rate = tf.placeholder(tf.float32, (), name="learning_rate")
     optimizer = optimizer_spec.constructor(
         learning_rate=learning_rate, **optimizer_spec.kwargs)
-    train_fn = minimize_and_clip(optimizer, total_error,
+    gradients, train_fn = minimize_and_clip(optimizer, total_error,
         var_list=q_func_vars, clip_val=grad_norm_clipping)
 
     # update_target_fn will be called periodically to copy Q network to target Q network
@@ -185,9 +185,6 @@ def learn(env,
         os.makedirs(os.path.join(checkpoint_dir, run_id))
     except Exception as e:
         print(e)
-
-    if restore is not None:
-        saver.restore(session, restore)
 
     for t in itertools.count():
         ### 1. Check stopping criterion
@@ -306,8 +303,13 @@ def learn(env,
                         obs_tp1_ph: obs_tp1
                     }
                 )
+                if restore is not None:
+                    saver.restore(session, restore)
+                save_path = os.path.join(checkpoint_dir, run_id, 'init.ckpt')
+                print(' * [INFO] Initial step saved to %s' % save_path)
+                saver.save(session, save_path)
 
-            session.run(train_fn, feed_dict={
+            _gradients, _ = session.run([gradients, train_fn], feed_dict={
                 obs_t_ph: obs_t,
                 act_t_ph: act_t,
                 rew_t_ph: rew_t,
@@ -343,5 +345,7 @@ def learn(env,
                 session,
                 os.path.join(
                     checkpoint_dir, run_id, 'step-%s.ckpt' % t))
-    print(' * [INFO] Final step saved to %s/step-final.ckpt' % run_id)
-    saver.save(session, os.path.join(checkpoint_dir, run_id, 'step-final.ckpt'))
+    save_path = os.path.join(checkpoint_dir, run_id, 'step-final.ckpt')
+    print(' * [INFO] Final step saved to %s' % save_path)
+    saver.save(session, save_path)
+    return save_path

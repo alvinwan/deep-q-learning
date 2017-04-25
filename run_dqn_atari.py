@@ -4,14 +4,14 @@ Usage:
     run_dqn_atari.py [options]
 
 Options:
-    --batch-size=<size>             Batch size [default: 32]
-    --envid=<envid>                 Environment id [default: SpaceInvadersNoFrameskip-v3]
-    --model=(atari|simple|fesimple) Model to use for training [default: simple]
-    --num-filters=<num>             Number of output filters for simple model [default: 64]
-    --timesteps=<steps>             Number of timesteps to run [default: 40000000]
-    --restore=<store>               Checkpoint to restore network from
-    --ckpt-dir=<dir>                Directory contain checkpoint files [default: ./checkpoints]
-    --learning-starts=<start>       Timestep when learning starts [default: 200000]
+    --batch-size=<size>                     Batch size [default: 32]
+    --envid=<envid>                         Environment id [default: SpaceInvadersNoFrameskip-v3]
+    --model=(atari|simple|fesimple|random)  Model to use for training [default: simple]
+    --num-filters=<num>                     Number of output filters for simple model [default: 64]
+    --timesteps=<steps>                     Number of timesteps to run [default: 40000000]
+    --restore=<store>                       Checkpoint to restore network from
+    --ckpt-dir=<dir>                        Directory contain checkpoint files [default: ./checkpoints]
+    --learning-starts=<start>               Timestep when learning starts [default: 200000]
 """
 
 import docopt
@@ -68,8 +68,16 @@ def simple_model_w_feat_eng(img_in, num_actions, scope, reuse=False):
     with tf.variable_scope(scope, reuse=reuse):
         out = img_in
         out = layers.flatten(out)
+        # stddev = 1/n, where n = number of inputs
+        gauss_initializer = initializers.xavier_initializer(uniform=False)
         with tf.variable_scope("action_value"):
-            out = layers.fully_connected(out, num_outputs=num_actions, activation_fn=tf.nn.relu)
+            out = layers.fully_connected(
+                out,
+                num_outputs=num_actions,
+                activation_fn=tf.nn.relu,
+                biases_initializer=None,
+                weights_initializer=gauss_initializer,
+                weights_regularizer=None)
         return out
 
 
@@ -93,11 +101,19 @@ def atari_learn(env,
                                          (num_iterations / 2,  5e-5 * lr_multiplier),
                                     ],
                                     outside_value=5e-5 * lr_multiplier)
-    optimizer = dqn.OptimizerSpec(
-        constructor=tf.train.AdamOptimizer,
-        kwargs=dict(epsilon=1e-4),
-        lr_schedule=lr_schedule
-    )
+
+    if model == 'fesimple':
+        optimizer = dqn.OptimizerSpec(
+            constructor=tf.train.GradientDescentOptimizer,
+            kwargs=dict(),
+            lr_schedule=lr_schedule
+        )
+    else:
+        optimizer = dqn.OptimizerSpec(
+            constructor=tf.train.AdamOptimizer,
+            kwargs=dict(epsilon=1e-4),
+            lr_schedule=lr_schedule
+        )
 
     def stopping_criterion(env, t):
         # notice that here t is the number of steps of the wrapped env,
@@ -108,7 +124,7 @@ def atari_learn(env,
         [
             (0, 1.0),
             (1e6, 0.1),
-            (num_iterations / 2 if num_iterations > 1e6 else 1e7, 0.01),
+            (num_iterations / 2 if num_iterations > 1e6 else 1e9, 0.01),
         ], outside_value=0.01
     )
 
@@ -120,7 +136,7 @@ def atari_learn(env,
         q_func = lambda *args, **kwargs:\
             simple_model(*args, num_filters=num_filters, **kwargs)
 
-    dqn.learn(
+    save_path = dqn.learn(
         env,
         q_func=q_func,
         optimizer_spec=optimizer,
@@ -139,6 +155,7 @@ def atari_learn(env,
         checkpoint_dir=checkpoint_dir
     )
     env.close()
+    return save_path
 
 
 def get_available_gpus():
@@ -195,7 +212,7 @@ def main():
         print(' * [INFO] %s model (Filters: %d, Batch Size: %d)' % (
             model, num_filters, batch_size))
 
-        atari_learn(
+        save_path = atari_learn(
             env,
             session,
             num_timesteps=int(arguments['--timesteps']),
@@ -205,6 +222,10 @@ def main():
             restore=arguments['--restore'],
             checkpoint_dir=arguments['--ckpt-dir'],
             learning_starts=arguments['--learning-starts'])
+        reader = tf.train.NewCheckpointReader(save_path)
+        W = reader.get_tensor('q_func/action_value/fully_connected/weights')
+        print('Largest entry:', np.linalg.norm(W, ord=np.inf))
+        print('Frobenius norm:', np.linalg.norm(W, ord='fro'))
 
 if __name__ == "__main__":
     main()
