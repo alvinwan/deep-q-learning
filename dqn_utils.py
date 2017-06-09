@@ -1,9 +1,21 @@
 """This file includes a collection of utility functions that are useful for
 implementing DQN."""
+
 import gym
 import tensorflow as tf
 import numpy as np
+import time
+import os.path
 import random
+
+from typing import List
+
+
+def write_sar_log(sars: List, logdir: str, episode_reward: int, name: str):
+    """Write state-action-rewards to a log file."""
+    np.savez_compressed(os.path.join(logdir,
+        '%s_%s_%s' % (str(time.time())[-5:], episode_reward, name)), np.vstack(sars))
+
 
 def huber_loss(x, delta=1.0):
     # https://en.wikipedia.org/wiki/Huber_loss
