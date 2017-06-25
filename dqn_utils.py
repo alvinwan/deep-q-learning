@@ -11,10 +11,10 @@ import random
 from typing import List
 
 
-def write_sar_log(sars: List, logdir: str, episode_reward: int, name: str):
+def write_sar_log(sars: List, logdir: str, episode_reward: int, suffix: str=''):
     """Write state-action-rewards to a log file."""
     np.savez_compressed(os.path.join(logdir,
-        '%s_%s_%s' % (str(time.time())[-5:], episode_reward, name)), np.vstack(sars))
+        '%s_%s%s' % (str(time.time())[-5:], episode_reward, suffix)), np.vstack(sars))
 
 
 def huber_loss(x, delta=1.0):

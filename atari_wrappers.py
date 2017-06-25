@@ -147,3 +147,11 @@ def wrap_deepmind(env):
     env = ProcessFrame84(env)
     env = ClippedRewardsWrapper(env)
     return env
+
+
+def wrap_custom(env):
+    env = EpisodicLifeEnv(env)
+    if 'FIRE' in env.unwrapped.get_action_meanings():
+        env = FireResetEnv(env)
+    env = ProcessFrame84(env)
+    return env

@@ -9,6 +9,7 @@ import tensorflow                as tf
 import tensorflow.contrib.layers as layers
 from collections import namedtuple
 from dqn_utils import *
+import csv
 
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs", "lr_schedule"])
 
@@ -181,10 +182,15 @@ def learn(env,
     run_id = str(start_time)[-6:].replace('.', '')
     print(' * [INFO] Run id: %s' % run_id)
 
+    run_dir = os.path.join(checkpoint_dir, run_id)
     try:
-        os.makedirs(os.path.join(checkpoint_dir, run_id))
+        os.makedirs(run_dir)
     except Exception as e:
         print(e)
+    stats_path = os.path.join(run_dir, 'stats.csv')
+    fh = open(stats_path, 'w')
+    writer = csv.writer(fh)
+    writer.writerow(['time', 'timestep', 'mean reward', 'best mean reward', 'episodes', 'exploration', 'learning rate'])
 
     for t in itertools.count():
         ### 1. Check stopping criterion
@@ -332,19 +338,25 @@ def learn(env,
             best_mean_episode_reward = max(best_mean_episode_reward, mean_episode_reward)
         if t % LOG_EVERY_N_STEPS == 0 and model_initialized:
 
-            print("Time %s s" % int(time.time() - start_time))
+            episode_time = int(time.time() - start_time)
+            num_episodes = len(episode_rewards)
+            exploration_value = exploration.value(t)
+            lr = optimizer_spec.lr_schedule.value(t)
+            print("Time %s s" % episode_time)
             start_time = time.time()
             print("Timestep %d" % (t,))
             print("mean reward (100 episodes) %f" % mean_episode_reward)
             print("best mean reward %f" % best_mean_episode_reward)
-            print("episodes %d" % len(episode_rewards))
-            print("exploration %f" % exploration.value(t))
-            print("learning_rate %f" % optimizer_spec.lr_schedule.value(t))
+            print("episodes %d" % num_episodes)
+            print("exploration %f" % exploration_value)
+            print("learning_rate %f" % lr)
+            writer.writerow([episode_time, t, mean_episode_reward, best_mean_episode_reward, num_episodes, exploration_value, lr])
             sys.stdout.flush()
             saver.save(
                 session,
                 os.path.join(
                     checkpoint_dir, run_id, 'step-%s.ckpt' % t))
+    fh.close()
     save_path = os.path.join(checkpoint_dir, run_id, 'step-final.ckpt')
     print(' * [INFO] Final step saved to %s' % save_path)
     saver.save(session, save_path)

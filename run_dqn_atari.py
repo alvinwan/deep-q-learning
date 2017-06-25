@@ -5,8 +5,8 @@ Usage:
 
 Options:
     --batch-size=<size>                     Batch size [default: 32]
-    --envid=<envid>                         Environment id [default: SpaceInvadersNoFrameskip-v3]
-    --model=(atari|simple|fesimple|random)  Model to use for training [default: simple]
+    --envid=<envid>                         Environment id [default: SpaceInvadersNoFrameskip-v4]
+    --model=(atari|simple|fesimple|random)  Model to use for training [default: atari]
     --num-filters=<num>                     Number of output filters for simple model [default: 64]
     --timesteps=<steps>                     Number of timesteps to run [default: 40000000]
     --restore=<store>                       Checkpoint to restore network from
@@ -194,6 +194,19 @@ def get_env(env_id, seed):
     expt_dir = './tmp/hw3_vid_dir2/'
     env = wrappers.Monitor(env, osp.join(expt_dir, "gym"), force=True)
     env = wrap_deepmind(env)
+
+    return env
+
+
+def get_custom_env(env_id, seed):
+    env = gym.make(env_id)
+
+    set_global_seeds(seed)
+    env.seed(seed)
+
+    expt_dir = './tmp/hw3_vid_dir2/'
+    env = wrappers.Monitor(env, osp.join(expt_dir, "gym"), force=True)
+    env = wrap_custom(env)
 
     return env
 
